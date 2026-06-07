@@ -7,8 +7,8 @@ void main() async {
   // Safety wrapper to run the UI preview without real backend keys
   try {
     await Supabase.initialize(
-      url: 'https://YOUR_PROJECT_ID.supabase.co', 
-      anonKey: 'YOUR_ANON_KEY',                   
+      url: 'https://wgepkwkrsqmlwciadcuv.supabase.co', 
+      anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2',                   
     );
   } catch (e) {
     debugPrint('Supabase configuration notice: Keys not configured yet. Running in UI preview mode.');
