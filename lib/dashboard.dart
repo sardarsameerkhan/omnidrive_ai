@@ -13,14 +13,13 @@ class DashboardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Safely retrieve the current authenticated session details from Supabase
     final User? user = Supabase.instance.client.auth.currentUser;
     final String userEmail = user?.email ?? 'anonymous@omnidrive.ai';
 
     return Scaffold(
       body: Row(
         children: [
-          // 1. Sleek Workspace Navigation Sidebar
+          // Sidebar Nav Panel
           Container(
             width: 260,
             color: const Color(0xff14171C),
@@ -52,7 +51,6 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ),
                 const Spacer(),
-                // Profile Session Card
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
@@ -76,7 +74,6 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                // Sign Out Operational Command Button
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
@@ -98,7 +95,7 @@ class DashboardScreen extends StatelessWidget {
             ),
           ),
           
-          // 2. Core Main Feed Canvas Area
+          // Workspace Canvas Stream
           Expanded(
             child: Container(
               color: const Color(0xff0B0D10),
@@ -116,12 +113,11 @@ class DashboardScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 32),
-                  // Placeholder Metrics Cards Layout Row
                   Row(
                     children: [
                       _buildMetricCard('Ecosystem Status', 'Operational', Icons.analytics_outlined),
                       const SizedBox(width: 24),
-                    _buildMetricCard('Active Transits', '0 Units Running', Icons.local_shipping_outlined),
+                      _buildMetricCard('Active Transits', '0 Units Running', Icons.local_shipping_outlined),
                     ],
                   ),
                 ],

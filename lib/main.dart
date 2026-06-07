@@ -9,7 +9,7 @@ void main() async {
   // Initialize your live cloud database connection
   await Supabase.initialize(
     url: 'https://wgepkwkrsqmlwciadcuv.supabase.co', 
-    anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2', // Your exact live publishable key
+    anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2', // Your live verified public key
   );
 
   runApp(const OmniDriveApp());
@@ -31,7 +31,6 @@ class OmniDriveApp extends StatelessWidget {
         ),
       ),
       home: const LoginScreenPreview(),
-      // Named routes mapping so the dashboard can route back on sign out
       routes: {
         '/login': (context) => const LoginScreenPreview(),
       },
@@ -48,10 +47,9 @@ class LoginScreenPreview extends StatefulWidget {
 
 class _LoginScreenPreviewState extends State<LoginScreenPreview> {
   int selectedRoleIndex = 0; 
-  bool isSignUp = false; // Switches the screen between Login mode and Register mode
-  bool isLoading = false; // Shows a loading spinner when communicating with Supabase
+  bool isSignUp = false; 
+  bool isLoading = false; 
 
-  // Controllers to capture what the user types live
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -62,12 +60,10 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
     const Color(0xff3B82F6), 
   ];
 
-  // The Cloud Database Logic function
   Future<void> handleAuthentication() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    // Simple client-side validation check
     if (email.isEmpty || password.isEmpty) {
       showErrorDialog('Please fill in all text input fields.');
       return;
@@ -91,32 +87,50 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
           });
         }
 
-        showSuccessSnackbar('Account created successfully! Please check your email inbox for confirmation.');
-        setState(() => isSignUp = false); // Flip view back to login mode automatically
+        showSuccessSnackbar('Account created successfully! Proceeding to Login.');
+        setState(() => isSignUp = false); 
       } else {
-        // Authenticate existing user accounts
-        await Supabase.instance.client.auth.signInWithPassword(
+        // 1. Authenticate the credentials
+        final AuthResponse res = await Supabase.instance.client.auth.signInWithPassword(
           email: email,
           password: password,
         );
         
-        showSuccessSnackbar('Access Granted! Logging into system profile.');
+        if (res.user != null) {
+          // 2. Fetch the true assigned role from the database profiles table
+          final data = await Supabase.instance.client
+              .from('profiles')
+              .select('role')
+              .eq('id', res.user!.id)
+              .single();
 
-        // Reroute active session from Login directly into the live workspace context frame
-        if (mounted) {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(
-              builder: (context) => DashboardScreen(
-                portalRole: roles[selectedRoleIndex],
-                themeAccent: roleAccents[selectedRoleIndex],
+          final String trueRole = data['role'] ?? 'CUSTOMER';
+          final String selectedRole = roles[selectedRoleIndex];
+
+          // 3. Role Validation Gatekeeper
+          if (trueRole != selectedRole) {
+            await Supabase.instance.client.auth.signOut();
+            showErrorDialog('Access Denied. Your profile is registered as a $trueRole, not a $selectedRole.');
+            return;
+          }
+
+          showSuccessSnackbar('Access Granted! Logging into system profile.');
+
+          // 4. Navigate on success
+          if (mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(
+                builder: (context) => DashboardScreen(
+                  portalRole: trueRole,
+                  themeAccent: roleAccents[selectedRoleIndex],
+                ),
               ),
-            ),
-          );
+            );
+          }
         }
       }
     } on AuthException catch (error) {
-      // Catch specific errors from Supabase (e.g. "Invalid Login Credentials")
       showErrorDialog(error.message);
     } catch (error) {
       showErrorDialog('An unexpected network error occurred.');
@@ -154,7 +168,6 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
 
   @override
   void dispose() {
-    // Clear out controllers when app closes to conserve system memory
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -312,7 +325,6 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                     ),
                     const SizedBox(height: 16),
 
-                    // Interactive Switch between Login and Registration states
                     Center(
                       child: TextButton(
                         onPressed: () {
@@ -352,7 +364,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
         ),
         const SizedBox(height: 8),
         TextField(
-          controller: controller, // Connects the live typing controller to the field
+          controller: controller, 
           obscureText: obscure,
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
