@@ -6,10 +6,10 @@ void main() async {
   // Ensure the framework is fully booted before executing logic
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize your live cloud database connection
+  // Initialize your live cloud database connection with your fresh running keys
   await Supabase.initialize(
     url: 'https://wgepkwkrsqmlwciadcuv.supabase.co', 
-    anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2', // Your live verified public key
+    anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2', 
   );
 
   runApp(const OmniDriveApp());
@@ -47,23 +47,28 @@ class LoginScreenPreview extends StatefulWidget {
 
 class _LoginScreenPreviewState extends State<LoginScreenPreview> {
   int selectedRoleIndex = 0; 
-  bool isSignUp = false; 
-  bool isLoading = false; 
+  bool isSignUp = false; // Switches the screen between Login mode and Register mode
+  bool isLoading = false; // Shows a loading spinner when communicating with Supabase
 
+  // Controllers to capture email and password text inputs
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
-  final List<String> roles = ['CUSTOMER', 'VENDOR', 'RIDER'];
+  // Admin is completely removed from the visible UI list to keep it hidden on the front page!
+  final List<String> publicRoles = ['CUSTOMER', 'VENDOR', 'RIDER'];
   final List<Color> roleAccents = [
-    const Color(0xff00F2FE), 
-    const Color(0xffFF5A00), 
-    const Color(0xff3B82F6), 
+    const Color(0xff00F2FE), // Customer Cyan
+    const Color(0xffFF5A00), // Vendor Orange
+    const Color(0xff3B82F6), // Rider Blue
+    const Color(0xffA855F7), // Hidden Admin Purple Accent
   ];
 
+  // Smart Backend Authentication Logic
   Future<void> handleAuthentication() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
+    // Simple validation check
     if (email.isEmpty || password.isEmpty) {
       showErrorDialog('Please fill in all text input fields.');
       return;
@@ -73,31 +78,31 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
 
     try {
       if (isSignUp) {
-        // 1. Create a brand new account inside your Supabase Auth Cloud
+        // --- PUBLIC REGISTRATION FLOW ---
         final AuthResponse res = await Supabase.instance.client.auth.signUp(
           email: email,
           password: password,
         );
 
-        // 2. Insert their custom role metadata into our profiles table
         if (res.user != null) {
+          // Assign whichever tab they had highlighted during registration
           await Supabase.instance.client.from('profiles').insert({
             'id': res.user!.id, 
-            'role': roles[selectedRoleIndex], 
+            'role': publicRoles[selectedRoleIndex], 
           });
         }
 
-        showSuccessSnackbar('Account created successfully! Proceeding to Login.');
+        showSuccessSnackbar('Account created successfully! Switching to Login mode.', roleAccents[selectedRoleIndex]);
         setState(() => isSignUp = false); 
       } else {
-        // 1. Authenticate the credentials
+        // --- SMART LOGIN FLOW ---
         final AuthResponse res = await Supabase.instance.client.auth.signInWithPassword(
           email: email,
           password: password,
         );
         
         if (res.user != null) {
-          // 2. Fetch the true assigned role from the database profiles table
+          // 1. Fetch their true database role from the profiles table
           final data = await Supabase.instance.client
               .from('profiles')
               .select('role')
@@ -105,25 +110,33 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
               .single();
 
           final String trueRole = data['role'] ?? 'CUSTOMER';
-          final String selectedRole = roles[selectedRoleIndex];
+          
+          // 2. Identify the matching theme color accent dynamically based on database value
+          Color dynamicAccent = const Color(0xff00F2FE);
+          if (trueRole == 'VENDOR') dynamicAccent = roleAccents[1];
+          if (trueRole == 'RIDER') dynamicAccent = roleAccents[2];
+          if (trueRole == 'ADMIN') dynamicAccent = roleAccents[3];
 
-          // 3. Role Validation Gatekeeper
-          if (trueRole != selectedRole) {
-            await Supabase.instance.client.auth.signOut();
-            showErrorDialog('Access Denied. Your profile is registered as a $trueRole, not a $selectedRole.');
-            return;
+          // 3. Security Cross-Check Gates (Only apply restrictions to non-admins)
+          if (trueRole != 'ADMIN') {
+            final String uiSelectedRole = publicRoles[selectedRoleIndex];
+            if (trueRole != uiSelectedRole) {
+              await Supabase.instance.client.auth.signOut();
+              showErrorDialog('Access Denied. This account is registered as a $trueRole, not a $uiSelectedRole.');
+              return;
+            }
           }
 
-          showSuccessSnackbar('Access Granted! Logging into system profile.');
+          showSuccessSnackbar('Access Granted! Synchronizing workspace...', dynamicAccent);
 
-          // 4. Navigate on success
+          // 4. Launch the specific role Dashboard Canvas
           if (mounted) {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
                 builder: (context) => DashboardScreen(
                   portalRole: trueRole,
-                  themeAccent: roleAccents[selectedRoleIndex],
+                  themeAccent: dynamicAccent,
                 ),
               ),
             );
@@ -156,11 +169,11 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
     );
   }
 
-  void showSuccessSnackbar(String message) {
+  void showSuccessSnackbar(String message, Color displayColor) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
-        backgroundColor: roleAccents[selectedRoleIndex],
+        backgroundColor: displayColor,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -168,6 +181,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
 
   @override
   void dispose() {
+    // Clear out controllers when app closes to conserve system memory
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
@@ -236,6 +250,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                     ),
                     const SizedBox(height: 32),
 
+                    // Role selector tabs only appear on Login mode, hiding Admin entirely
                     if (!isSignUp) ...[
                       const Text(
                         'SELECT YOUR PORTAL FRAME',
@@ -249,7 +264,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
-                          children: List.generate(roles.length, (index) {
+                          children: List.generate(publicRoles.length, (index) {
                             bool isSelected = selectedRoleIndex == index;
                             return Expanded(
                               child: GestureDetector(
@@ -270,7 +285,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                                   ),
                                   child: Center(
                                     child: Text(
-                                      roles[index],
+                                      publicRoles[index],
                                       style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.bold,
@@ -301,7 +316,6 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                       obscure: true,
                       controller: _passwordController,
                     ),
-                    
                     const SizedBox(height: 32),
 
                     SizedBox(
@@ -318,7 +332,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                         child: isLoading 
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
                           : Text(
-                              isSignUp ? 'CREATE ACCOUNT' : 'ENTER ${roles[selectedRoleIndex]} SYSTEM',
+                              isSignUp ? 'CREATE ACCOUNT' : 'ENTER ${publicRoles[selectedRoleIndex]} SYSTEM',
                               style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
                             ),
                       ),
