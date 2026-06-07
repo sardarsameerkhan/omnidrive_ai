@@ -1,3 +1,4 @@
+import 'dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -30,6 +31,10 @@ class OmniDriveApp extends StatelessWidget {
         ),
       ),
       home: const LoginScreenPreview(),
+      // Adding named routing maps so dashboard disconnect methods know how to navigate back
+      routes: {
+        '/login': (context) => const LoginScreenPreview(),
+      },
     );
   }
 }
@@ -86,7 +91,20 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
           password: password,
         );
         showSuccessSnackbar('Access Granted! Logging into system profile.');
+
       }
+              // Reroute active session from Login directly into the live workspace context frame
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => DashboardScreen(
+                portalRole: roles[selectedRoleIndex],
+                themeAccent: roleAccents[selectedRoleIndex],
+              ),
+            ),
+          );
+        }
     } on AuthException catch (error) {
       // Catch specific errors from Supabase (e.g. "Invalid Login Credentials")
       showErrorDialog(error.message);
