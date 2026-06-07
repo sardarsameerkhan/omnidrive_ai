@@ -1,6 +1,6 @@
-import 'dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dashboard.dart';
 
 void main() async {
   // Ensure the framework is fully booted before executing logic
@@ -9,7 +9,7 @@ void main() async {
   // Initialize your live cloud database connection
   await Supabase.initialize(
     url: 'https://wgepkwkrsqmlwciadcuv.supabase.co', 
-    anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2', // <-- PASTE YOUR ANON KEY HERE AGAIN
+    anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2', // Your exact live publishable key
   );
 
   runApp(const OmniDriveApp());
@@ -31,7 +31,7 @@ class OmniDriveApp extends StatelessWidget {
         ),
       ),
       home: const LoginScreenPreview(),
-      // Adding named routing maps so dashboard disconnect methods know how to navigate back
+      // Named routes mapping so the dashboard can route back on sign out
       routes: {
         '/login': (context) => const LoginScreenPreview(),
       },
@@ -49,9 +49,9 @@ class LoginScreenPreview extends StatefulWidget {
 class _LoginScreenPreviewState extends State<LoginScreenPreview> {
   int selectedRoleIndex = 0; 
   bool isSignUp = false; // Switches the screen between Login mode and Register mode
-  bool isLoading = false; // Shows a loading spinner when communication with Supabase is active
+  bool isLoading = false; // Shows a loading spinner when communicating with Supabase
 
-  // 1. Controllers to capture what the user types live
+  // Controllers to capture what the user types live
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
@@ -62,7 +62,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
     const Color(0xff3B82F6), 
   ];
 
-  // 2. The Cloud Database Logic function
+  // The Cloud Database Logic function
   Future<void> handleAuthentication() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
@@ -77,11 +77,20 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
 
     try {
       if (isSignUp) {
-        // Create a brand new account inside your Supabase Cloud
-        await Supabase.instance.client.auth.signUp(
+        // 1. Create a brand new account inside your Supabase Auth Cloud
+        final AuthResponse res = await Supabase.instance.client.auth.signUp(
           email: email,
           password: password,
         );
+
+        // 2. Insert their custom role metadata into our profiles table
+        if (res.user != null) {
+          await Supabase.instance.client.from('profiles').insert({
+            'id': res.user!.id, 
+            'role': roles[selectedRoleIndex], 
+          });
+        }
+
         showSuccessSnackbar('Account created successfully! Please check your email inbox for confirmation.');
         setState(() => isSignUp = false); // Flip view back to login mode automatically
       } else {
@@ -90,10 +99,10 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
           email: email,
           password: password,
         );
+        
         showSuccessSnackbar('Access Granted! Logging into system profile.');
 
-      }
-              // Reroute active session from Login directly into the live workspace context frame
+        // Reroute active session from Login directly into the live workspace context frame
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -105,6 +114,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
             ),
           );
         }
+      }
     } on AuthException catch (error) {
       // Catch specific errors from Supabase (e.g. "Invalid Login Credentials")
       showErrorDialog(error.message);
