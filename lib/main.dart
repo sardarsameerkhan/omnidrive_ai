@@ -2,17 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
+  // Ensure the framework is fully booted before executing logic
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Safety wrapper to run the UI preview without real backend keys
-  try {
-    await Supabase.initialize(
-      url: 'https://wgepkwkrsqmlwciadcuv.supabase.co', 
-      anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2',                   
-    );
-  } catch (e) {
-    debugPrint('Supabase configuration notice: Keys not configured yet. Running in UI preview mode.');
-  }
+  // Initialize your live cloud database connection
+  await Supabase.initialize(
+    url: 'https://wgepkwkrsqmlwciadcuv.supabase.co', 
+    anonKey: 'sb_publishable_HEeaKxDwmcyeARxRpNOOjA_3lOAsKC2', // <-- PASTE YOUR ANON KEY HERE AGAIN
+  );
 
   runApp(const OmniDriveApp());
 }
@@ -46,12 +43,94 @@ class LoginScreenPreview extends StatefulWidget {
 
 class _LoginScreenPreviewState extends State<LoginScreenPreview> {
   int selectedRoleIndex = 0; 
+  bool isSignUp = false; // Switches the screen between Login mode and Register mode
+  bool isLoading = false; // Shows a loading spinner when communication with Supabase is active
+
+  // 1. Controllers to capture what the user types live
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+
   final List<String> roles = ['CUSTOMER', 'VENDOR', 'RIDER'];
   final List<Color> roleAccents = [
     const Color(0xff00F2FE), 
     const Color(0xffFF5A00), 
     const Color(0xff3B82F6), 
   ];
+
+  // 2. The Cloud Database Logic function
+  Future<void> handleAuthentication() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+
+    // Simple client-side validation check
+    if (email.isEmpty || password.isEmpty) {
+      showErrorDialog('Please fill in all text input fields.');
+      return;
+    }
+
+    setState(() => isLoading = true);
+
+    try {
+      if (isSignUp) {
+        // Create a brand new account inside your Supabase Cloud
+        await Supabase.instance.client.auth.signUp(
+          email: email,
+          password: password,
+        );
+        showSuccessSnackbar('Account created successfully! Please check your email inbox for confirmation.');
+        setState(() => isSignUp = false); // Flip view back to login mode automatically
+      } else {
+        // Authenticate existing user accounts
+        await Supabase.instance.client.auth.signInWithPassword(
+          email: email,
+          password: password,
+        );
+        showSuccessSnackbar('Access Granted! Logging into system profile.');
+      }
+    } on AuthException catch (error) {
+      // Catch specific errors from Supabase (e.g. "Invalid Login Credentials")
+      showErrorDialog(error.message);
+    } catch (error) {
+      showErrorDialog('An unexpected network error occurred.');
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
+
+  void showErrorDialog(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xff14171C),
+        title: const Text('Authentication Error', style: TextStyle(color: Colors.redAccent, fontSize: 16, fontWeight: FontWeight.bold)),
+        content: Text(message, style: const TextStyle(color: Colors.white, fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK', style: TextStyle(color: Color(0xff00F2FE))),
+          )
+        ],
+      ),
+    );
+  }
+
+  void showSuccessSnackbar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        backgroundColor: roleAccents[selectedRoleIndex],
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    // Clear out controllers when app closes to conserve system memory
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +139,6 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
     return Scaffold(
       body: Stack(
         children: [
-          // Dynamic Background Radial Glow
           AnimatedContainer(
             duration: const Duration(milliseconds: 400),
             decoration: BoxDecoration(
@@ -104,71 +182,84 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                           'OMNIDRIVE AI',
                           style: TextStyle(
                             fontSize: 22,
-                            fontWeight: FontWeight.w900, // FIXED: Changed from .black to .w900
+                            fontWeight: FontWeight.w900,
                             letterSpacing: 1.5,
                           ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 6),
-                    const Text(
-                      'Next-Gen Automotive Marketplace Workspace',
-                      style: TextStyle(color: Colors.grey, fontSize: 13),
+                    Text(
+                      isSignUp ? 'Create your ecosystem access account' : 'Next-Gen Automotive Marketplace Workspace',
+                      style: const TextStyle(color: Colors.grey, fontSize: 13),
                     ),
                     const SizedBox(height: 32),
 
-                    const Text(
-                      'SELECT YOUR PORTAL FRAME',
-                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
-                    ),
-                    const SizedBox(height: 10),
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        color: const Color(0xff0B0D10),
-                        borderRadius: BorderRadius.circular(12),
+                    if (!isSignUp) ...[
+                      const Text(
+                        'SELECT YOUR PORTAL FRAME',
+                        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.grey, letterSpacing: 1),
                       ),
-                      child: Row(
-                        children: List.generate(roles.length, (index) {
-                          bool isSelected = selectedRoleIndex == index;
-                          return Expanded(
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  selectedRoleIndex = index;
-                                });
-                              },
-                              child: AnimatedContainer(
-                                duration: const Duration(milliseconds: 200),
-                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                decoration: BoxDecoration(
-                                  color: isSelected ? roleAccents[index].withOpacity(0.15) : Colors.transparent,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: isSelected ? roleAccents[index] : Colors.transparent,
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xff0B0D10),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: List.generate(roles.length, (index) {
+                            bool isSelected = selectedRoleIndex == index;
+                            return Expanded(
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    selectedRoleIndex = index;
+                                  });
+                                },
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  decoration: BoxDecoration(
+                                    color: isSelected ? roleAccents[index].withOpacity(0.15) : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isSelected ? roleAccents[index] : Colors.transparent,
+                                    ),
                                   ),
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    roles[index],
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.bold,
-                                      color: isSelected ? roleAccents[index] : Colors.grey,
+                                  child: Center(
+                                    child: Text(
+                                      roles[index],
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: isSelected ? roleAccents[index] : Colors.grey,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          );
-                        }),
+                            );
+                          }),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
+                      const SizedBox(height: 32),
+                    ],
 
-                    _buildField(label: 'EMAIL ADDRESS', hint: 'driver@omnidrive.ai', icon: Icons.email_outlined),
+                    _buildField(
+                      label: 'EMAIL ADDRESS', 
+                      hint: 'driver@omnidrive.ai', 
+                      icon: Icons.email_outlined,
+                      controller: _emailController,
+                    ),
                     const SizedBox(height: 20),
-                    _buildField(label: 'SECURE PASSWORD', hint: '••••••••', icon: Icons.lock_outline, obscure: true),
+                    _buildField(
+                      label: 'SECURE PASSWORD', 
+                      hint: '••••••••', 
+                      icon: Icons.lock_outline, 
+                      obscure: true,
+                      controller: _passwordController,
+                    ),
                     
                     const SizedBox(height: 32),
 
@@ -182,10 +273,28 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           elevation: 0,
                         ),
-                        onPressed: () {},
+                        onPressed: isLoading ? null : handleAuthentication,
+                        child: isLoading 
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                          : Text(
+                              isSignUp ? 'CREATE ACCOUNT' : 'ENTER ${roles[selectedRoleIndex]} SYSTEM',
+                              style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+                            ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Interactive Switch between Login and Registration states
+                    Center(
+                      child: TextButton(
+                        onPressed: () {
+                          setState(() {
+                            isSignUp = !isSignUp;
+                          });
+                        },
                         child: Text(
-                          'ENTER ${roles[selectedRoleIndex]} SYSTEM',
-                          style: const TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1),
+                          isSignUp ? 'Already have an account? Login' : "Don't have an account? Register Here",
+                          style: TextStyle(color: currentAccent, fontSize: 13),
                         ),
                       ),
                     ),
@@ -199,7 +308,13 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
     );
   }
 
-  Widget _buildField({required String label, required String hint, required IconData icon, bool obscure = false}) {
+  Widget _buildField({
+    required String label, 
+    required String hint, 
+    required IconData icon, 
+    required TextEditingController controller,
+    bool obscure = false,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -209,6 +324,7 @@ class _LoginScreenPreviewState extends State<LoginScreenPreview> {
         ),
         const SizedBox(height: 8),
         TextField(
+          controller: controller, // Connects the live typing controller to the field
           obscureText: obscure,
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
